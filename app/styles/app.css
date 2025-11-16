@@ -1,0 +1,39 @@
+@import './globals.css';
+@import './window.css';
+
+body {
+  font-family:
+    system-ui,
+    -apple-system,
+    Arial,
+    
+    Helvetica,
+    sans-serif;
+  margin: 0;
+  overflow: hidden;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* Override the global height rule for neuropack professions container */
+.neuropack-professions-container {
+  height: auto !important;
+}
+
+/* Ensure all profession tags have consistent height */
+.profession-tag {
+  height: 48px !important;
+  min-height: 48px !important;
+  max-height: 48px !important;
+}
+
+/* Override any global CSS that might affect the last child */
+.profession-tags-container .profession-tag:last-child {
+  height: 48px !important;
+}
