@@ -9,6 +9,8 @@ export type {
   ProcessingJob,
   ParseResponse,
   TaskResponse,
+  PrescriptionRequest,
+  PrescriptionResponse,
 } from './client';
 
 export { authClient, default as AuthClient } from './auth';

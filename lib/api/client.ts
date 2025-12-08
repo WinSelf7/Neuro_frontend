@@ -69,6 +69,30 @@ export interface TaskResponse {
   message?: string;
 }
 
+export interface PrescriptionRequest {
+  patient: {
+    lastName: string;
+    firstName: string;
+    ssn: string;
+    ipp: string;
+  };
+  prescriber_initials: string;
+  amy_code: string;
+  finess: string;
+  fse_number: string;
+  edm_base_path: string;
+  template_path?: string;
+}
+
+export interface PrescriptionResponse {
+  success: boolean;
+  message: string;
+  pdf_path?: string;
+  thumbnail_path?: string;
+  edm_path?: string;
+  error?: string;
+}
+
 class ApiClient {
   private baseURL: string;
 
@@ -234,6 +258,15 @@ class ApiClient {
     }
 
     return response.json();
+  }
+
+  // Prescription generation endpoint
+  async generatePrescription(request: PrescriptionRequest): Promise<PrescriptionResponse> {
+    return this.request('/generate-prescription', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+    });
   }
 
   // Utility method to get download URL

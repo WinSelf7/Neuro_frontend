@@ -4,10 +4,24 @@ import {
   AlertCircleIcon,
   SettingsIcon,
   ZapIcon,
+  Search,
+  X,
+  Plus,
+  Trash2,
+  CheckCircle2,
 } from "lucide-react";
 import { Card, CardContent } from "../ui/card";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
+import { Input } from "../ui/input";
+import { Checkbox } from "../ui/checkbox";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../ui/select";
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
 import {
@@ -23,8 +37,11 @@ import {
   TableHeader,
   TableRow,
 } from "../ui/table";
-import { apiClient, ParseResponse } from "@/lib/api";
+import { apiClient, ParseResponse, PrescriptionResponse } from "@/lib/api";
 import { useNavigate } from "react-router-dom";
+import { PrescriptionPDFViewer as PrescriptionPDFViewerDefault, PrescriptionData } from "./templates/PrescriptionPDF";
+import { PrescriptionPDFViewer as PrescriptionPDFViewer1 } from "./templates/PrescriptionPDF1";
+import { PrescriptionPDFViewer as PrescriptionPDFViewer2 } from "./templates/PrescriptionPDF2";
 
 type Transmission =
   | string
@@ -55,9 +72,12 @@ type TraceabilityRow = {
 /* ---------- AMY dictionary and helpers ---------- */
 type AmyEntry = { label: string; price: string };
 const AMY_TABLE: Record<string, AmyEntry> = {
-  'AMY 8': { label: 'Mesure de l’acuité visuelle et de la réfraction – Renouvellement', price: '20,80 €' },
-  'AMY 15': { label: 'Orthoptie – Bilan orthoptique', price: '35,00 €' },
+  'AMY 8': { label: 'Mesure de l\'acuité visuelle et de la réfraction – Renouvellement', price: '20,80 €' },
+  'AMY 15': { label: 'Bilan des troubles oculomoteurs', price: '39,00 €' },
   'AMY 7,7': { label: 'Séance orthoptique (courte)', price: '15,40 €' },
+  'AMY 7': { label: 'Traitement de l\'amblyopie par série de vingt séances', price: '18,20 €' },
+  'AMY 4': { label: 'Traitement des hétérophories (20 séances)', price: '10,40 €' },
+  'AMY 7.7': { label: 'Traitement du strabisme par série de vingt séances', price: '20,02 €' },
 };
 
 function normalizeAmyCode(raw: string): string | null {
@@ -243,7 +263,53 @@ const TreatmentCardWrapperSection = () => {
 
 /* ---------- “Ordonnance en cours de traitement” (preview card) ---------- */
 
-const TreatmentDetailsSection = () => {
+const TreatmentDetailsSection = ({ parseResult }: { parseResult: ParseResponse | null }) => {
+  const [selectedTemplate, setSelectedTemplate] = useState<'default' | 'template1' | 'template2'>('default');
+
+  // Convert parseResult.extract to PrescriptionData format
+  // Memoize to ensure proper updates when parseResult changes
+  const prescriptionData: PrescriptionData = useMemo(() => {
+    if (!parseResult?.extract) {
+      return {
+        form_date: null,
+        patient: {
+          last_name: null,
+          first_name: null,
+          nir: null,
+          birth_date: null,
+        },
+        doctor: {
+          full_name: null,
+          rpps: null,
+        },
+        orthoptic_care: {
+          description: null,
+          acts_prescribed: [],
+        },
+        ocr_raw_text: null,
+      };
+    }
+
+    return {
+      form_date: parseResult.extract.form_date || null,
+      patient: {
+        last_name: parseResult.extract.patient?.last_name || null,
+        first_name: parseResult.extract.patient?.first_name || null,
+        nir: parseResult.extract.patient?.nir || null,
+        birth_date: parseResult.extract.patient?.birth_date || null,
+      },
+      doctor: {
+        full_name: parseResult.extract.doctor?.full_name || null,
+        rpps: parseResult.extract.doctor?.rpps || null,
+      },
+      orthoptic_care: {
+        description: parseResult.extract.orthoptic_care?.description || null,
+        acts_prescribed: parseResult.extract.orthoptic_care?.acts_prescribed || [],
+      },
+      ocr_raw_text: parseResult.extract.ocr_raw_text || null,
+    };
+  }, [parseResult]);
+
   return (
     <section className={gradientOuter}>
       <div className="rounded-xl bg-[rgba(250,236,210,0.8)] p-15">
@@ -252,32 +318,461 @@ const TreatmentDetailsSection = () => {
             Ordonnance en cours de traitement
           </h2>
 
-          <Badge className="inline-flex items-center gap-2 rounded-lg border border-[#4e311780] bg-[#4e311714] px-4 py-2">
-            <div className="h-4 w-4 rounded-lg bg-[#4e3117]" />
-            <span className="font-p3-bold text-[length:var(--p3-bold-font-size)] leading-[var(--p3-bold-line-height)] tracking-[var(--p3-bold-letter-spacing)] text-[#4e3117]">
-              TRAITEMENT EN COURS
-            </span>
-          </Badge>
+          <div className="flex items-center gap-3">
+            <Select value={selectedTemplate} onValueChange={(value: 'default' | 'template1' | 'template2') => setSelectedTemplate(value)}>
+              <SelectTrigger className="w-[200px] border border-[#4e311780] bg-[#4e311714] text-[#4e3117] hover:bg-[#4e311728]">
+                <SelectValue placeholder="Choisir un modèle" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="default">Modèle par défaut</SelectItem>
+                <SelectItem value="template1">Modèle 1 (Thème bleu-vert)</SelectItem>
+                <SelectItem value="template2">Modèle 2 (Thème bordeaux)</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Badge className="inline-flex items-center gap-2 rounded-lg border border-[#4e311780] bg-[#4e311714] px-4 py-2">
+              <div className="h-4 w-4 rounded-lg bg-[#4e3117]" />
+              <span className="font-p3-bold text-[length:var(--p3-bold-font-size)] leading-[var(--p3-bold-line-height)] tracking-[var(--p3-bold-letter-spacing)] text-[#4e3117]">
+                TRAITEMENT EN COURS
+              </span>
+            </Badge>
+          </div>
         </header>
 
         <div className="mt-6 flex justify-center">
-          <img
-            className="h-auto w-full max-w-[668px] rounded-lg shadow-md"
-            alt="Prescription document"
-            src="res://icons/image-97.png"
+        {parseResult?.extract ? (
+          selectedTemplate === 'default' ? (
+            <PrescriptionPDFViewerDefault 
+              key={`prescription-default-${parseResult.extract?.ocr_raw_text?.length || 0}-${parseResult.extract?.patient?.last_name || ''}-${parseResult.extract?.patient?.first_name || ''}`}
+              data={prescriptionData}
+              width="50%"
+              height="100%"
+              className="w-full h-full"
+            />
+          ) : selectedTemplate === 'template1' ? (
+            <PrescriptionPDFViewer1 
+              key={`prescription-template1-${parseResult.extract?.ocr_raw_text?.length || 0}-${parseResult.extract?.patient?.last_name || ''}-${parseResult.extract?.patient?.first_name || ''}`}
+              data={prescriptionData}
+              width="50%"
+              height="100%"
+              className="w-full h-full"
+            />
+          ) : (
+            <PrescriptionPDFViewer2 
+              key={`prescription-template2-${parseResult.extract?.ocr_raw_text?.length || 0}-${parseResult.extract?.patient?.last_name || ''}-${parseResult.extract?.patient?.first_name || ''}`}
+              data={prescriptionData}
+              width="50%"
+              height="100%"
+              className="w-full h-full"
+            />
+          )
+      ) : (
+        selectedTemplate === 'default' ? (
+          <PrescriptionPDFViewerDefault 
+            key={`prescription-empty-default`}
+            data={prescriptionData}
+            width="50%"
+            height="100%"
+            className="w-full h-full"
           />
+        ) : selectedTemplate === 'template1' ? (
+          <PrescriptionPDFViewer1 
+            key={`prescription-empty-template1`}
+            data={prescriptionData}
+            width="50%"
+            height="100%"
+            className="w-full h-full"
+          />
+        ) : (
+          <PrescriptionPDFViewer2 
+            key={`prescription-empty-template2`}
+            data={prescriptionData}
+            width="50%"
+            height="100%"
+            className="w-full h-full"
+          />
+        )
+      )}
         </div>
       </div>
     </section>
   );
 };
 
+/* ---------- Automatic Mode Modal ---------- */
+
+const AutomaticModeModal = ({
+  isOpen,
+  onClose,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+}) => {
+
+  const [dossierNumber, setDossierNumber] = useState("");
+
+  const handleSearch = () => {
+    // TODO: Implement search functionality
+    console.log("Searching for FSE:",  dossierNumber);
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div
+      className="automatic-mode-modal fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      onClick={onClose}
+    >
+      <div
+        className="relative w-full max-w-2xl h-[200px] !h-[200px] rounded-xl bg-[#d3c1ad] p-8 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Close button */}
+        <button
+          onClick={onClose}
+          className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full bg-[#d3c1ad] hover:bg-[#c0a88f] transition-colors"
+          aria-label="Fermer"
+        >
+          <X className="h-5 w-5 text-[#4e3117]" />
+        </button>
+
+        {/* Title */}
+        <h2 className="mb-4 text-2xl font-bold text-[#4e3117]">
+          MODE AUTOMATIQUE
+        </h2>
+
+        {/* Instruction */}
+        <p className=" text-sm text-[#4e3117]">
+          Saisir N° FSE ou N° Dossier pour récupérer les données patient
+        </p>
+
+        {/* Input fields */}
+        <div className="py-4 h-[70px] !h-[70px]">
+          {/* First input - longer
+          <div className="w-full">
+            <Input
+              type="text"
+              value={fseNumber}
+              onChange={(e) => setFseNumber(e.target.value)}
+              placeholder=""
+              className="w-full border-b-2 border-blue-500 bg-transparent px-0 py-2 text-[#4e3117] focus:border-blue-600 focus:outline-none"
+            />
+          </div> */}
+
+          {/* Second input with search button */}
+          <div className="flex items-center gap-3 h-[50px] !h-[50px]">
+            <Input
+              type="text"
+              value={dossierNumber}
+              onChange={(e) => setDossierNumber(e.target.value)}
+              placeholder="Ex: 553381"
+              className="flex-1 border-b-2 border-blue-500 bg-transparent px-0 py-2 text-[#4e3117] placeholder:text-[#4e3117]/60 focus:border-blue-600 focus:outline-none"
+            />
+            <Button
+              onClick={handleSearch}
+              className="inline-flex items-center gap-2 rounded-full border-none bg-[linear-gradient(184deg,rgba(211,193,173,1)_0%,rgba(192,168,143,1)_15%,rgba(155,123,95,1)_82%,rgba(124,95,72,1)_100%)] px-4 py-2 text-xs font-semibold text-[#4e3016] shadow-[0_6px_12px_rgba(0,0,0,0.25)] hover:bg-opacity-90"
+            >
+              <Search className="h-4 w-4" />
+              <span>Rechercher</span>
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/* ---------- Manual Mode Modal ---------- */
+
+const ManualModeModal = ({
+  isOpen,
+  onClose,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+}) => {
+  const [lastName, setLastName] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [ssn, setSsn] = useState("");
+  const [identifierType, setIdentifierType] = useState<"dossier" | "fse">("dossier");
+  const [identifierValue, setIdentifierValue] = useState("");
+  const [prescriber, setPrescriber] = useState("");
+  const [executor, setExecutor] = useState("");
+  const [selectedActs, setSelectedActs] = useState<string[]>(["AMY 7"]);
+
+  const availableActs = Object.keys(AMY_TABLE).filter(
+    (code) => !selectedActs.includes(code)
+  );
+
+  const handleToggleAct = (code: string) => {
+    if (selectedActs.includes(code)) {
+      setSelectedActs(selectedActs.filter((c) => c !== code));
+    } else {
+      setSelectedActs([...selectedActs, code]);
+    }
+  };
+
+  const handleSubmit = () => {
+    // TODO: Implement submit functionality
+    console.log("Manual mode submission:", {
+      lastName,
+      firstName,
+      ssn,
+      identifierType,
+      identifierValue,
+      prescriber,
+      executor,
+      selectedActs,
+    });
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div
+      className="manual-mode-modal fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      onClick={onClose}
+    >
+      <div
+        className="relative w-[90%] h-[80%] !h-[80%] my-8 rounded-xl bg-[#d3c1ad] p-8 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Close button */}
+        <button
+          onClick={onClose}
+          className="absolute right-3 top-3 flex h-7 w-7 items-center justify-center rounded-full bg-[#d3c1ad] hover:bg-[#c0a88f] transition-colors z-10"
+          aria-label="Fermer"
+        >
+          <X className="h-4 w-4 text-[#4e3117]" />
+        </button>
+
+        {/* Title */}
+        <div className="mb-3">
+          <h2 className="text-xl font-bold text-[#4e3117]">
+            MODE MANUEL / B2
+          </h2>
+          <p className="text-xs text-[#4e3117]/80 mt-0.5">Saisie complète</p>
+        </div>
+
+        <div className="space-y-3">
+          {/* Patient Information Section */}
+          <div className="space-y-2">
+            <h3 className="text-base font-semibold text-[#4e3117]">
+              Informations patient
+            </h3>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-xs font-medium text-[#4e3117] mb-0.5">
+                  Nom
+                </label>
+                <Input
+                  type="text"
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                  placeholder="entrer nom..."
+                  className="w-full h-8 text-sm bg-white/80 border border-[#4e3117]/30 text-[#4e3117]"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-[#4e3117] mb-0.5">
+                  Prénom
+                </label>
+                <Input
+                  type="text"
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                  placeholder="entrer Prénom..."
+                  className="w-full h-8 text-sm bg-white/80 border border-[#4e3117]/30 text-[#4e3117]"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-[#4e3117] mb-0.5">
+                  N° Sécu
+                </label>
+                <Input
+                  type="text"
+                  value={ssn}
+                  onChange={(e) => setSsn(e.target.value)}
+                  placeholder="entrer N° Sécu..."
+                  className="w-full h-8 text-sm bg-white/80 border border-[#4e3117]/30 text-[#4e3117]"
+                />
+              </div>
+            </div>
+
+            {/* Identifier Type */}
+            <div>
+              <div className="flex items-center gap-3 mb-1">
+                <label className="flex items-center gap-1.5">
+                  <input
+                    type="radio"
+                    name="identifierType"
+                    checked={identifierType === "dossier"}
+                    onChange={() => setIdentifierType("dossier")}
+                    className="text-[#4e3117]"
+                  />
+                  <span className="text-xs text-[#4e3117]">N° Dossier</span>
+                </label>
+                <label className="flex items-center gap-1.5">
+                  <input
+                    type="radio"
+                    name="identifierType"
+                    checked={identifierType === "fse"}
+                    onChange={() => setIdentifierType("fse")}
+                    className="text-[#4e3117]"
+                  />
+                  <span className="text-xs text-[#4e3117]">N° FSE</span>
+                </label>
+              </div>
+              <Input
+                type="text"
+                value={identifierValue}
+                onChange={(e) => setIdentifierValue(e.target.value)}
+                placeholder={`entrer N° ${identifierType === "dossier" ? "Dossier" : "FSE"}...`}
+                className="w-full h-8 text-sm bg-white/80 border border-[#4e3117]/30 text-[#4e3117]"
+              />
+            </div>
+          </div>
+
+          {/* Prescriber and Executor Section */}
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-xs font-medium text-[#4e3117] mb-0.5">
+                Prescripteur
+              </label>
+              <Select value={prescriber} onValueChange={setPrescriber}>
+                <SelectTrigger className="w-full h-8 text-sm bg-white/80 border border-[#4e3117]/30 text-[#4e3117]">
+                  <SelectValue placeholder="Sélectionner" />
+                </SelectTrigger>
+                <SelectContent>
+                  {PRESCRIBERS.map((p) => (
+                    <SelectItem key={p.initials} value={p.initials}>
+                      {p.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-[#4e3117] mb-0.5">
+                Exécuteur
+              </label>
+              <Select value={executor} onValueChange={setExecutor}>
+                <SelectTrigger className="w-full h-8 text-sm bg-white/80 border border-[#4e3117]/30 text-[#4e3117]">
+                  <SelectValue placeholder="Sélectionner" />
+                </SelectTrigger>
+                <SelectContent>
+                  {PRESCRIBERS.map((p) => (
+                    <SelectItem key={p.initials} value={p.initials}>
+                      {p.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* ACTES À PRESCRIRE Section */}
+          <div className="space-y-2">
+            <h3 className="text-base font-semibold text-[#4e3117]">
+              ACTES À PRESCRIRE
+            </h3>
+            <div className="space-y-1.5">
+              {/* Selected Acts */}
+              {selectedActs.map((code) => {
+                const act = AMY_TABLE[code];
+                if (!act) return null;
+                return (
+                  <div
+                    key={code}
+                    className="flex items-center justify-between p-2 bg-white/60 rounded-lg border border-[#4e3117]/20"
+                  >
+                    <div className="flex items-center gap-2 flex-1">
+                      <CheckCircle2 className="h-4 w-4 text-green-600 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <div className="font-semibold text-sm text-[#4e3117]">{code}</div>
+                        <div className="text-xs text-[#4e3117]/80 line-clamp-1">{act.label}</div>
+                      </div>
+                      <div className="font-semibold text-sm text-[#4e3117] flex-shrink-0 ml-2">{act.price}</div>
+                    </div>
+                    <button
+                      onClick={() => handleToggleAct(code)}
+                      className="ml-2 p-1 hover:bg-red-100 rounded transition-colors flex-shrink-0"
+                      aria-label="Retirer"
+                    >
+                      <Trash2 className="h-3.5 w-3.5 text-red-600" />
+                    </button>
+                  </div>
+                );
+              })}
+
+              {/* Available Acts */}
+              {availableActs.map((code) => {
+                const act = AMY_TABLE[code];
+                if (!act) return null;
+                return (
+                  <div
+                    key={code}
+                    className="flex items-center justify-between p-2 bg-white/40 rounded-lg border border-[#4e3117]/20"
+                  >
+                    <div className="flex items-center gap-2 flex-1">
+                      <Checkbox
+                        checked={false}
+                        onCheckedChange={() => handleToggleAct(code)}
+                        className="border-[#4e3117] h-3.5 w-3.5 flex-shrink-0"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="font-semibold text-sm text-[#4e3117]">{code}</div>
+                        <div className="text-xs text-[#4e3117]/80 line-clamp-1">{act.label}</div>
+                      </div>
+                      <div className="font-semibold text-sm text-[#4e3117] flex-shrink-0 ml-2">{act.price}</div>
+                    </div>
+                    <button
+                      onClick={() => handleToggleAct(code)}
+                      className="ml-2 p-1 hover:bg-green-100 rounded transition-colors flex-shrink-0"
+                      aria-label="Ajouter"
+                    >
+                      <Plus className="h-3.5 w-3.5 text-green-600" />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Submit Button */}
+          <div className="flex justify-end gap-2 pt-2 h-[50px] !h-[50px]">
+            <Button
+              onClick={onClose}
+              variant="ghost"
+              className="h-8 px-3 text-sm text-[#4e3117] hover:bg-white/60"
+            >
+              Annuler
+            </Button>
+            <Button
+              onClick={handleSubmit}
+              className="h-8 px-3 text-sm bg-[linear-gradient(184deg,rgba(211,193,173,1)_0%,rgba(192,168,143,1)_15%,rgba(155,123,95,1)_82%,rgba(124,95,72,1)_100%)] text-[#4e3016] shadow-[0_6px_12px_rgba(0,0,0,0.25)] hover:bg-opacity-90"
+            >
+              Valider
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 /* ---------- Red alert info + mode buttons ---------- */
 
-const TreatmentInfoWrapperSection = () => {
+const TreatmentInfoWrapperSection = ({
+  onAutomaticModeClick,
+  onManualModeClick,
+}: {
+  onAutomaticModeClick: () => void;
+  onManualModeClick: () => void;
+}) => {
   const modeButtons = [
-    { icon: ZapIcon, label: "Mode Automatique" },
-    { icon: SettingsIcon, label: "Mode Manuel / B2" },
+    { icon: ZapIcon, label: "Mode Automatique", onClick: onAutomaticModeClick },
+    { icon: SettingsIcon, label: "Mode Manuel / B2", onClick: onManualModeClick },
   ];
 
   return (
@@ -302,6 +797,7 @@ const TreatmentInfoWrapperSection = () => {
             return (
               <Button
                 key={button.label}
+                onClick={button.onClick}
                 variant="ghost"
                 className="inline-flex items-center gap-2 rounded-full border border-black/40 bg-[linear-gradient(184deg,rgba(211,193,173,1)_0%,rgba(192,168,143,1)_15%,rgba(155,123,95,1)_82%,rgba(124,95,72,1)_100%)] px-4 py-2 text-xs font-semibold text-[#4e3016] shadow-[0_6px_12px_rgba(0,0,0,0.25)] hover:bg-opacity-90"
               >
@@ -352,7 +848,7 @@ const SystemFunctionalitySection = ({
         icon: "res://icons/check-circle-1.svg",
       },
       user: "Dr. Martin",
-      actions: "/frame-1618869710-2.svg",
+      actions: "res://icons/action.png",
     },
     {
       date: "08/10/2025 10:15",
@@ -373,7 +869,7 @@ const SystemFunctionalitySection = ({
         icon: "res://icons/check-circle-1.svg",
       },
       user: "Dr. Martin",
-      actions: "/frame-1618869710.svg",
+      actions: "res://icons/action.png",
     },
     {
       date: "07/10/2025 10:03",
@@ -391,7 +887,7 @@ const SystemFunctionalitySection = ({
         icon: "res://icons/check-circle-1.svg",
       },
       user: "Dr. Martin",
-      actions: "/frame-1618869710-1.svg",
+      actions: "res://icons/action.png",
     },
   ];
 
@@ -545,7 +1041,7 @@ const SystemFunctionalitySection = ({
                   <TableCell className="px-4 py-2">
                     <div className="flex items-center justify-center">
                       <img
-                        className="h-6 w-20 object-contain"
+                        className="h-3 w-20 object-contain"
                         alt="Actions"
                         src={row.actions}
                       />
@@ -579,8 +1075,17 @@ export const GnrateurOrdonnances = () => {
   const [edmBase, setEdmBase] = useState<string>('D:\\Stimut\\Documents_Patients');
   const [amyCode, setAmyCode] = useState<string | undefined>(undefined);
   const [amyPrice, setAmyPrice] = useState<string | undefined>(undefined);
+  const [generatingPrescription, setGeneratingPrescription] = useState(false);
+  const [prescriptionResult, setPrescriptionResult] = useState<PrescriptionResponse | null>(null);
+  // Modal states
+  const [isAutomaticModeModalOpen, setIsAutomaticModeModalOpen] = useState(false);
+  const [isManualModeModalOpen, setIsManualModeModalOpen] = useState(false);
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = (e?: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e) {
+      document.getElementById("ocr-upload")?.click();
+      return;
+    }
     const file = e.target.files?.[0];
     if (!file) return;
     setUploadedFile(file);
@@ -633,7 +1138,7 @@ export const GnrateurOrdonnances = () => {
           icon: res.success ? "res://icons/check-circle-1.svg" : "res://icons/vector.svg",
         },
         user: "Opérateur",
-        actions: "/frame-1618869710-2.svg",
+        actions: "res://icons/action.png",
       };
       setRows((prev) => [newRow, ...(prev || [])].slice(0, 10));
     } catch (err) {
@@ -658,7 +1163,7 @@ export const GnrateurOrdonnances = () => {
           icon: "res://icons/vector.svg",
         },
         user: "Opérateur",
-        actions: "/frame-1618869710.svg",
+        actions: "res://icons/action.png",
       };
       setRows((prev) => [errorRow, ...(prev || [])].slice(0, 10));
     } finally {
@@ -685,6 +1190,82 @@ export const GnrateurOrdonnances = () => {
     void navigator.clipboard.writeText(full);
   };
 
+  const handleGeneratePrescription = async () => {
+    // Validate required fields
+    if (!patient.lastName || !patient.firstName || !patient.ipp) {
+      setParseError("Veuillez remplir les informations patient (Nom, Prénom, IPP)");
+      return;
+    }
+    if (!amyCode) {
+      setParseError("Code AMY requis. Veuillez d'abord analyser le document.");
+      return;
+    }
+    if (!fseNumber) {
+      setParseError("Numéro FSE requis");
+      return;
+    }
+    if (!finess) {
+      setParseError("FINESS centre requis");
+      return;
+    }
+
+    setGeneratingPrescription(true);
+    setPrescriptionResult(null);
+    setParseError(null);
+
+    try {
+      const result = await apiClient.generatePrescription({
+        patient: {
+          lastName: patient.lastName,
+          firstName: patient.firstName,
+          ssn: patient.ssn,
+          ipp: patient.ipp,
+        },
+        prescriber_initials: prescriberInitials,
+        amy_code: amyCode,
+        finess: finess,
+        fse_number: fseNumber,
+        edm_base_path: edmBase,
+        template_path: undefined, // Can be configured later
+      });
+
+      setPrescriptionResult(result);
+
+      if (result.success) {
+        // Update traceability row
+        const now = new Date();
+        const newRow: TraceabilityRow = {
+          date: formatDate(now),
+          fseNumber: fseNumber,
+          dossierNumber: patient.ipp,
+          type: "Auto",
+          insertion: {
+            status: "INSÉRÉE",
+            icon: "res://icons/check-1.svg",
+            color: "#c7ff7d",
+          },
+          transmission: { hasMail: false, confirmed: false },
+          statut: {
+            label: "OK",
+            icon: "res://icons/check-circle-1.svg",
+          },
+          user: "Opérateur",
+          actions: "res://icons/action.png",
+        };
+        setRows((prev) => [newRow, ...(prev || [])].slice(0, 10));
+      }
+    } catch (err) {
+      setPrescriptionResult({
+        success: false,
+        message: "Erreur lors de la génération",
+        error: err instanceof Error ? err.message : "Erreur inconnue",
+      });
+      setParseError(err instanceof Error ? err.message : "Échec de la génération");
+    } finally {
+      setGeneratingPrescription(false);
+    }
+  };
+
   return (
     <div className="relative flex w-full flex-col gap-6 bg-[#f5e4cf] p-5 text-sm overflow-y-auto">
       {/* decorative images removed */}
@@ -692,7 +1273,7 @@ export const GnrateurOrdonnances = () => {
       <div className="relative z-20 flex flex-col gap-6">
         <TreatmentCardSection />
         <TreatmentCardWrapperSection />
-        <TreatmentDetailsSection />
+        <TreatmentDetailsSection parseResult={parseResult} />
 
         {/* Upload & Quick Preview */}
         <section className={gradientOuter}>
@@ -725,14 +1306,17 @@ export const GnrateurOrdonnances = () => {
               </div>
             </div>
 
-            {!uploadedFile ? (
-              <div className="flex flex-col items-center justify-center gap-4 rounded-lg border border-dashed border-[#faecd2] bg-[#faecd229] p-6">
+              {!uploadedFile ? (
+               <div
+                className="flex flex-col items-center justify-center gap-4 rounded-lg border border-dashed border-[#faecd2] bg-[#faecd229] p-6 h-[150px] !h-[150px]"
+                onClick={() => handleFileUpload()}
+               >
                 <img
                   className="h-12 w-12"
                   alt="Upload"
                   src="res://icons/tabler-drag-drop.svg"
                 />
-                <div className="text-center">
+                <div className="text-center h-[50px] !h-[50px]">
                   <div className="font-caption-3-bold text-[#faecd2]">
                     Glissez-déposez une image ou un PDF ici
                   </div>
@@ -857,7 +1441,14 @@ export const GnrateurOrdonnances = () => {
                       <div className="mt-3 text-sm">
                         <div><b>Dossier EDMS:</b> {fullEdmPath || '—'}</div>
                         <div><b>Nom de fichier:</b> {targetFilename}</div>
-                        <div className="mt-2 flex gap-2">
+                        <div className="mt-2 flex gap-2 flex-wrap">
+                          <Button 
+                            className="h-8 px-3" 
+                            onClick={handleGeneratePrescription}
+                            disabled={generatingPrescription || !amyCode || !patient.ipp || !fseNumber}
+                          >
+                            {generatingPrescription ? "Génération..." : "Générer prescription"}
+                          </Button>
                           <Button className="h-8 px-3" onClick={copyTargetPath}>Copier chemin + nom</Button>
                           <a
                             className="h-8 px-3 inline-flex items-center rounded border border-[#faecd2]"
@@ -868,6 +1459,22 @@ export const GnrateurOrdonnances = () => {
                             Télécharger ZIP OCR
                           </a>
                         </div>
+                        {prescriptionResult && (
+                          <div className={`mt-2 p-2 rounded text-xs ${prescriptionResult.success ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                            <div><b>{prescriptionResult.success ? '✓ Succès:' : '✗ Erreur:'}</b> {prescriptionResult.message}</div>
+                            {prescriptionResult.success && prescriptionResult.pdf_path && (
+                              <div className="mt-1">
+                                <div><b>PDF:</b> {prescriptionResult.pdf_path}</div>
+                                {prescriptionResult.thumbnail_path && (
+                                  <div><b>Thumbnail:</b> {prescriptionResult.thumbnail_path}</div>
+                                )}
+                              </div>
+                            )}
+                            {prescriptionResult.error && (
+                              <div className="mt-1"><b>Détails:</b> {prescriptionResult.error}</div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -884,13 +1491,28 @@ export const GnrateurOrdonnances = () => {
           </div>
         </section>
 
-        <TreatmentInfoWrapperSection />
+        <TreatmentInfoWrapperSection
+          onAutomaticModeClick={() => setIsAutomaticModeModalOpen(true)}
+          onManualModeClick={() => setIsManualModeModalOpen(true)}
+        />
         <SystemFunctionalitySection
           rows={rows}
           onExportClick={handleExport}
           exportDisabled={!canExport}
         />
       </div>
+
+      {/* Automatic Mode Modal */}
+      <AutomaticModeModal
+        isOpen={isAutomaticModeModalOpen}
+        onClose={() => setIsAutomaticModeModalOpen(false)}
+      />
+
+      {/* Manual Mode Modal */}
+      <ManualModeModal
+        isOpen={isManualModeModalOpen}
+        onClose={() => setIsManualModeModalOpen(false)}
+      />
     </div>
   );
 };

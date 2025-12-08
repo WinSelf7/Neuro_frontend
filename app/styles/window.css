@@ -69,6 +69,14 @@
   height: 100%;
 }
 
+/* Exclude fixed positioned elements (like modals) from the height rule */
+.window-content div:last-child[style*="position: fixed"],
+.window-content div:last-child.fixed,
+.window-content .automatic-mode-modal,
+.window-content .manual-mode-modal {
+  height: auto !important;
+}
+
 .window-titlebar {
   display: flex;
   position: relative;
